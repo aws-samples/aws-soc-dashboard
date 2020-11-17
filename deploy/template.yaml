@@ -1,0 +1,332 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Sample SOC Dashboard build on Amazon Elasticsearch Service.
+Parameters:
+  DataNodeEBSVolumeSize:
+    Type: Number
+    Default: 100
+    Description: Elasticsearch volume disk size
+  NodeType:
+    Type: String
+    Default: m5.xlarge.elasticsearch
+    Description: Elasticsearch Node Type
+  NodeNumber:
+    Type: String
+    Default: 3
+    Description: Elasticsearch Node Number
+  ElasticSearchDomainName:
+    Type: String
+    Default: sec-dashboards
+    AllowedPattern: '[a-z\-]*'
+    Description: Elasticsearch domain name
+  MasterUser:
+    Type: String
+    MinLength: '8'
+    MaxLength: '41'
+    AllowedPattern: '^[a-zA-Z0-9]*$'
+    Description: Master User Name
+  MasterUserPass:
+    Type: String
+    MinLength: '8'
+    MaxLength: '41'
+    Description: >-
+      Master User Password (The master user password must contain at least one
+      uppercase letter, one lowercase letter, one number, and one special
+      character.)
+Resources:
+  ElasticsearchDomain:
+    Type: 'AWS::Elasticsearch::Domain'
+    Properties:
+      DomainName: !Ref ElasticSearchDomainName
+      ElasticsearchVersion: '7.8'
+      DomainEndpointOptions:
+        EnforceHTTPS: 'true'
+      ElasticsearchClusterConfig:
+        DedicatedMasterEnabled: 'false'
+        InstanceCount: !Ref NodeNumber
+        ZoneAwarenessEnabled: 'true'
+        ZoneAwarenessConfig:
+          AvailabilityZoneCount: !Ref NodeNumber
+        InstanceType: !Ref NodeType
+      NodeToNodeEncryptionOptions:
+        Enabled: 'true'
+      AdvancedSecurityOptions:
+        Enabled: 'true'
+        InternalUserDatabaseEnabled: 'true'
+        MasterUserOptions:
+          MasterUserName: !Ref MasterUser
+          MasterUserPassword: !Ref MasterUserPass
+      EncryptionAtRestOptions:
+        Enabled: 'true'
+        KmsKeyId: !Ref ESKey
+      EBSOptions:
+        EBSEnabled: true
+        Iops: 0
+        VolumeSize: !Ref DataNodeEBSVolumeSize
+        VolumeType: gp2
+      SnapshotOptions:
+        AutomatedSnapshotStartHour: '0'
+      AccessPolicies:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: '*'
+            Action: 'es:*'
+            Resource: !Sub >-
+              arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticSearchDomainName}/*
+      AdvancedOptions:
+        rest.action.multi.allow_explicit_index: 'true'
+  ESKey:
+    Type: 'AWS::KMS::Key'
+    Properties:
+      Description: Key for ES Domain
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: key-default-1
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow ES Principal to use the key
+            Effect: Allow
+            Principal:
+              Service: es.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:Decrypt'
+            Resource: '*'
+  ESKeyAlias:
+    Type: 'AWS::KMS::Alias'
+    Properties:
+      AliasName: !Sub 'alias/${AWS::AccountId}-es-encryption-key'
+      TargetKeyId:
+        Ref: ESKey
+
+  SecHubFirehoseDeliveryStream:
+    Type: 'AWS::KinesisFirehose::DeliveryStream'
+    Properties:
+      DeliveryStreamName: !Sub 'amazon-sechub-${ElasticSearchDomainName}'
+      DeliveryStreamType: DirectPut
+      ElasticsearchDestinationConfiguration:
+        BufferingHints:
+          IntervalInSeconds: '60'
+          SizeInMBs: 5
+        CloudWatchLoggingOptions:
+          Enabled: true
+          LogGroupName: !Ref LogGroup #!Sub 'amazon-sechub-${ElasticSearchDomainName}'
+          LogStreamName: ElasticsearchDelivery
+        DomainARN: !GetAtt ElasticsearchDomain.Arn
+        IndexName: sechub_index
+        IndexRotationPeriod: OneDay
+        RetryOptions:
+          DurationInSeconds: '60'
+        RoleARN: !GetAtt KinesisFirehoseDeliveryRole.Arn
+        S3BackupMode: AllDocuments
+        S3Configuration:
+          BucketARN: !Sub 'arn:aws:s3:::${KinesisFirehoseS3Bucket}'
+          BufferingHints:
+            IntervalInSeconds: '60'
+            SizeInMBs: '50'
+          CompressionFormat: UNCOMPRESSED
+          Prefix: log/
+          RoleARN: !GetAtt KinesisFirehoseDeliveryRole.Arn
+          CloudWatchLoggingOptions:
+            Enabled: true
+            LogGroupName: !Ref LogGroup #!Sub 'amazon-sechub-${ElasticSearchDomainName}'
+            LogStreamName: S3Delivery
+
+  WAFFirehoseDeliveryStream:
+    Type: 'AWS::KinesisFirehose::DeliveryStream'
+    Properties:
+      DeliveryStreamName: !Sub 'aws-waf-logs-${ElasticSearchDomainName}'
+      DeliveryStreamType: DirectPut
+      ElasticsearchDestinationConfiguration:
+        BufferingHints:
+          IntervalInSeconds: '60'
+          SizeInMBs: 5
+        CloudWatchLoggingOptions:
+          Enabled: true
+          LogGroupName: !Ref LogGroup #!Sub 'aws-waf-logs-${ElasticSearchDomainName}'
+          LogStreamName: ElasticsearchDelivery
+        DomainARN: !GetAtt ElasticsearchDomain.Arn
+        IndexName: sechub_index
+        IndexRotationPeriod: OneDay
+        RetryOptions:
+          DurationInSeconds: '60'
+        RoleARN: !GetAtt KinesisFirehoseDeliveryRole.Arn
+        S3BackupMode: AllDocuments
+        S3Configuration:
+          BucketARN: !Sub 'arn:aws:s3:::${KinesisFirehoseS3Bucket}'
+          BufferingHints:
+            IntervalInSeconds: '60'
+            SizeInMBs: '50'
+          CompressionFormat: UNCOMPRESSED
+          Prefix: log/
+          RoleARN: !GetAtt KinesisFirehoseDeliveryRole.Arn
+          CloudWatchLoggingOptions:
+            Enabled: true
+            LogGroupName: !Ref LogGroup #!Sub 'aws-waf-logs-${ElasticSearchDomainName}'
+            LogStreamName: S3Delivery
+
+
+  KinesisFirehoseS3Bucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+
+  KinesisFirehoseDeliveryRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action: 'sts:AssumeRole'
+            Principal:
+              Service:
+                - firehose.amazonaws.com
+
+  KinesisFirehoseDeliveryPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: SecHubDeliveryPolicy
+      Roles:
+        - !Ref KinesisFirehoseDeliveryRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Action:
+              - 's3:AbortMultipartUpload'
+              - 's3:GetBucketLocation'
+              - 's3:GetObject'
+              - 's3:ListBucket'
+              - 's3:ListBucketMultipartUploads'
+              - 's3:PutObject'
+            Resource:
+              - !Sub 'arn:aws:s3:::${KinesisFirehoseS3Bucket}'
+              - !Sub 'arn:aws:s3:::${KinesisFirehoseS3Bucket}/*'
+          - Sid: ''
+            Effect: Allow
+            Action:
+              - 'lambda:InvokeFunction'
+              - 'lambda:GetFunctionConfiguration'
+            Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:%FIREHOSE_DEFAULT_FUNCTION%:%FIREHOSE_DEFAULT_VERSION%'
+          - Sid: ''
+            Effect: Allow
+            Action:
+              - 'ec2:DescribeVpcs'
+              - 'ec2:DescribeVpcAttribute'
+              - 'ec2:DescribeSubnets'
+              - 'ec2:DescribeSecurityGroups'
+              - 'ec2:DescribeNetworkInterfaces'
+              - 'ec2:CreateNetworkInterface'
+              - 'ec2:CreateNetworkInterfacePermission'
+              - 'ec2:DeleteNetworkInterface'
+            Resource: '*'
+          - Sid: ''
+            Effect: Allow
+            Action:
+              - 'es:DescribeElasticsearchDomain'
+              - 'es:DescribeElasticsearchDomains'
+              - 'es:DescribeElasticsearchDomainConfig'
+              - 'es:ESHttpPost'
+              - 'es:ESHttpPut'
+            Resource:
+              - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticSearchDomainName}'
+              - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticSearchDomainName}/*'
+          - Sid: ''
+            Effect: Allow
+            Action:
+              - 'es:ESHttpGet'
+            Resource:
+              - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticSearchDomainName}/_all/_settings'
+              - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticSearchDomainName}/_cluster/stats'
+              - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticSearchDomainName}/sechub_index*/_mapping/superstore'
+              - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticSearchDomainName}/_nodes'
+              - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticSearchDomainName}/_nodes/stats'               
+              - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticSearchDomainName}/_nodes/*/stats'
+              - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticSearchDomainName}/_stats'
+              - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticSearchDomainName}/sechub_index*/_stats'
+          - Sid: ''
+            Effect: Allow
+            Action:
+              - 'logs:PutLogEvents'
+            Resource:
+              - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/kinesisfirehose/deliverystream:logstream:*'
+          - Sid: ''
+            Effect: Allow
+            Action:
+              - 'kinesis:DescribeStream'
+              - 'kinesis:GetShardIterator'
+              - 'kinesis:GetRecords'
+              - 'kinesis:ListShards'
+            Resource: !Sub 'arn:aws:kinesis:${AWS::Region}:${AWS::AccountId}:stream/%FIREHOSE_STREAM_NAME%'
+
+  SecHubFindingsEventRule:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      Description: All Findings from AWS Security Hub
+      EventPattern:
+        source:
+          - "aws.securityhub"
+        detail-type:
+          - "Security Hub Findings - Imported"
+      State: "ENABLED"
+      Name: SecHubFindings2Firehose
+      Targets:
+        - Arn: !GetAtt 
+            - SecHubFirehoseDeliveryStream
+            - Arn
+          Id: SecHubFindingsEventRule
+          RoleArn: !GetAtt 
+            - EventDeliveryRole
+            - Arn
+
+  EventDeliveryRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: 'sts:AssumeRole'
+
+  EventDeliveryPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: event_firehose_delivery_policy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - 'firehose:PutRecord'
+              - 'firehose:PutRecordBatch'
+            Resource:
+              - !Sub 'arn:aws:firehose:${AWS::Region}:${AWS::AccountId}:deliverystream/${SecHubFirehoseDeliveryStream}'
+      Roles:
+        - !Ref EventDeliveryRole
+
+  LogGroup: 
+    Type: AWS::Logs::LogGroup
+    Properties: 
+      RetentionInDays: 7
+
+  ESLogStream: 
+    Type: AWS::Logs::LogStream
+    Properties: 
+      LogGroupName: !Ref LogGroup
+      LogStreamName: ElasticsearchDelivery
+
+  S3LogStream: 
+    Type: AWS::Logs::LogStream
+    Properties: 
+      LogGroupName: !Ref LogGroup
+      LogStreamName: S3Delivery
