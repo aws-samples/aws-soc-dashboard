@@ -42,11 +42,6 @@ _Note: Tested in the N. Virginia region (us-east-1). But you can test in every r
    - arn:aws:iam::<ACCOUNT_ID>:role/admin
    - arn:aws:iam::<ACCOUNT_ID:role/<FIREHOSE_STREAM_IAMROLE> (this is the role used by Kinesis Firehose can deliver to ES Domain)
 
-## Enabling Security Service
-
-Now you can enable services such as Amazon Guardduty, Amazon Macie, AWS Security Hub and Amazon Inspector that will start to send findings to ElasticSearch domain.
-You can also configure to [send AWS WAF Logs to the ElasticSearch domain](https://docs.aws.amazon.com/waf/latest/developerguide/logging.html#logging-management)
-
 ## Enabling WAF Logs to use the solution
 
 For Security Hub, you don't need to configure to send the findins to the ES domain, because this is configured with EventBridge Rule created by Cloudformation template. For AWS WAF Logs, you need to enable logging details on AWS Console.
