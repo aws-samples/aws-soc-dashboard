@@ -47,6 +47,19 @@ _Note: Tested in the N. Virginia region (us-east-1). But you can test in every r
 Now you can enable services such as Amazon Guardduty, Amazon Macie, AWS Security Hub and Amazon Inspector that will start to send findings to ElasticSearch domain.
 You can also configure to [send AWS WAF Logs to the ElasticSearch domain](https://docs.aws.amazon.com/waf/latest/developerguide/logging.html#logging-management)
 
+## Enabling WAF Logs to use the solution
+
+For Security Hub, you don't need to configure to send the findins to the ES domain, because this is configured with EventBridge Rule created by Cloudformation template. For AWS WAF Logs, you need to enable logging details on AWS Console.
+
+1. Open [WAF Console](https://console.aws.amazon.com/wafv2).
+2. In **AWS WAF**, click in **Web ACLs**.
+3. Click in your **WAF ACL**.
+4. Click in **Logging and metrics** tab.
+5. In **Logging**, click in **Enable logging**.
+6. In **Logging details**, click in **Select a delivery stream**.
+7. Select **aws-waf-logs-sec-dashboards** and click in **Enable logging** button.
+
+
 ## Creating ES Index Patterns
 
 Now that you have findings coming to your ElasticSearch Domain, you need to create an Index Patterns for 
