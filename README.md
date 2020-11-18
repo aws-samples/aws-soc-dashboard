@@ -37,7 +37,7 @@ _Note: Tested in the N. Virginia region (us-east-1). But you can test in every r
 5. In **Password**, put the **MasterPass** parameter defined by you on Cloudformation deployment.
 6. In the **Kibana** front end, go to **Security**.
 7. Click in **Role Mappings**.
-8. Click on **Edit** button on **all_access**.
+8. Click in **Edit** button on **all_access**.
 9. In **Backend roles**, click on **Add Backend Role** button and insert two roles, on in each line:
    - arn:aws:iam::<ACCOUNT_ID>:role/admin
    - arn:aws:iam::<ACCOUNT_ID:role/<FIREHOSE_STREAM_IAMROLE> (this is the role used by Kinesis Firehose can deliver to ES Domain)
@@ -46,6 +46,19 @@ _Note: Tested in the N. Virginia region (us-east-1). But you can test in every r
 
 Now you can enable services such as Amazon Guardduty, Amazon Macie, AWS Security Hub and Amazon Inspector that will start to send findings to ElasticSearch domain.
 You can also configure to [send AWS WAF Logs to the ElasticSearch domain](https://docs.aws.amazon.com/waf/latest/developerguide/logging.html#logging-management)
+
+## Creating ES Index Patterns
+
+Now that you have findings coming to your ElasticSearch Domain, you need to create an Index Patterns for 
+each Firehose stream. In this case, you need to create index patterns for **sechub_index** and **waf_index**.
+
+1. After you are logged into Kibana, go to **Stack Management**.
+2. Click in **Index Patterns**.
+3. Click in **Create index pattern**.
+4. In the **Index pattern** box, type sechub_index* and click in **Next step**.
+5. In the **Time Filter field name** drop-down, select **detail.findings.UpdatedAt** and click in **Create index pattern**.
+
+_Repeat this steps for waf_index_ 
 
 
 ## Clean up

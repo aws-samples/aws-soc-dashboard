@@ -153,7 +153,7 @@ Resources:
           LogGroupName: !Ref LogGroup #!Sub 'aws-waf-logs-${ElasticSearchDomainName}'
           LogStreamName: ElasticsearchDelivery
         DomainARN: !GetAtt ElasticsearchDomain.Arn
-        IndexName: sechub_index
+        IndexName: waf_index
         IndexRotationPeriod: OneDay
         RetryOptions:
           DurationInSeconds: '60'
@@ -247,11 +247,13 @@ Resources:
               - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticSearchDomainName}/_all/_settings'
               - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticSearchDomainName}/_cluster/stats'
               - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticSearchDomainName}/sechub_index*/_mapping/superstore'
+              - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticSearchDomainName}/waf_index*/_mapping/superstore'
               - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticSearchDomainName}/_nodes'
               - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticSearchDomainName}/_nodes/stats'               
               - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticSearchDomainName}/_nodes/*/stats'
               - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticSearchDomainName}/_stats'
               - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticSearchDomainName}/sechub_index*/_stats'
+              - !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${ElasticSearchDomainName}/waf_index*/_stats'
           - Sid: ''
             Effect: Allow
             Action:
