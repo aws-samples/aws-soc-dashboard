@@ -28,6 +28,7 @@ Parameters:
     Type: String
     MinLength: '8'
     MaxLength: '41'
+    NoEcho: True
     Description: >-
       Master User Password (The master user password must contain at least one
       uppercase letter, one lowercase letter, one number, and one special
